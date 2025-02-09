@@ -8,7 +8,9 @@ URL = "https://www.alcopa-auction.fr/"
 DB_FILE = "auctions.db"
 
 # Устанавливаем французскую локаль для работы с датами
-locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
+# locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
+locale.setlocale(locale.LC_TIME, "C.UTF-8")
+
 
 # Словарь для преобразования названий месяцев
 MONTHS_FR = {
