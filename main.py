@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 
 URL = "https://www.alcopa-auction.fr/"
 DB_FILE = "auctions.db"
+HTML_FILE = "mnt/data/AlcopaAuctionVenteEnCours02.html"
 
 # Устанавливаем французскую локаль для работы с датами
 locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
@@ -18,6 +19,11 @@ MONTHS_FR = {
     "mai": "05", "juin": "06", "juil.": "07", "août": "08",
     "sept.": "09", "oct.": "10", "nov.": "11", "déc.": "12"
 }
+
+def load_html(file_path):
+    """Загружает HTML и создает объект BeautifulSoup."""
+    with open(file_path, "r", encoding="utf-8") as file:
+        return BeautifulSoup(file, "html.parser")
 
 def fetch_html(url):
     """Загружает HTML-страницу с веб-сайта."""
@@ -34,6 +40,7 @@ def create_database():
         CREATE TABLE IF NOT EXISTS auctions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             category TEXT,
+            description TEXT,
             location TEXT,
             lots TEXT,
             date TEXT,
@@ -44,18 +51,18 @@ def create_database():
     conn.commit()
     conn.close()
 
-def insert_into_database(category, location, lots, date, link, linkLive):
+def insert_into_database(category, description, location, lots, date, link, linkLive):
     """Вставляет данные в базу, если записи еще нет."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            INSERT INTO auctions (category, location, lots, date, link, linkLive)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (category, location, lots, date, link, linkLive))
+            INSERT INTO auctions (category, description, location, lots, date, link, linkLive)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (category, description, location, lots, date, link, linkLive))
         conn.commit()
     except sqlite3.IntegrityError:
-        print(f"⚠ Запись уже существует: {location} - {date} - {link} - {linkLive}")
+        print(f"⚠ Запись уже существует: {location} - {description} - {date} - {link} - {linkLive}")
     conn.close()
 
 def convert_timestamp(ts):
@@ -74,65 +81,77 @@ def convert_french_date(date_str):
 
 def parse_sales(soup):
     """Парсит веб-страницу."""
-    sales = {"Vente en Salle": [], "Vente Web": [], "Vente de matériel en salle": []}
+    sales = {"Vente en cours": [], "Vente en Salle": [], "Vente Web": [], "Vente de matériel en salle": []}
     for row in soup.find_all("div", class_="row"):
         cols = row.find_all("div", class_="col-md-12", recursive=False)
-        if len(cols) < 2:
+        # cols = row.find_all("div", class_="d-table w-100 mb-2 rounded border no-decoration bg-graylight")
+        # if len(cols) < 2:
+        #     continue
+        if not cols:
             continue
-        h4 = cols[0].find("h4")
-        if not h4:
-            continue
-        category_name = h4.get_text(strip=True)
-        if "Vente en Salle" in category_name:
-            sale_category = "Vente en Salle"
-        elif "Vente Web" in category_name: # or "Vente web Madrid" in category_name:
-            sale_category = "Vente Web"
-        elif "Vente de matériel en salle" in category_name:
-            sale_category = "Vente de matériel en salle"
-        else:
-            continue
-        for col in cols[1:]:
-            div = col.find("div", class_="d-table w-100 mb-2 rounded border no-decoration bg-graylight")
-            if not div:
+        for col in cols:
+            h4 = col.find("h4")
+            if not h4:
                 continue
-            try:
-                location = div.find("span", class_="font-weight-bold").text.strip()
-                lots = div.find("span", class_="text-graynorm").text.strip()
-                date = "Non précisé"
-                # link = div.find("a", class_="sale-access-href")["href"]
-                # link = "https://www.alcopa-auction.fr" + div.find("a", class_="sale-access-href")["href"]
-                link = URL + div.find("a", class_="sale-access-href")["href"].lstrip("/")
-                linkLiveSale = "Non précisé"
 
-                if sale_category == "Vente Web":
-                    ts_span = div.find("span", class_="js-countdown-time")
-                    if ts_span and ts_span.has_attr("data-ts"):
-                        date = convert_timestamp(ts_span["data-ts"])
-                elif sale_category == "Vente en Salle":
-                    date_tag = div.find("div", class_="float-right")
-                    if date_tag:
-                        date = convert_french_date(date_tag.text.strip())
-                    # Формируем ссылку live
-                    parts = link.split("/")
-                    city = parts[4]  # Название города (например, "beauvais")
-                    sale_id = parts[5]  # Номер (например, "8058")                    
-                    linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
-                sale_data = (location, lots, date, link, linkLiveSale)
-                if sale_data not in sales[sale_category]:
-                    sales[sale_category].append(sale_data)
-            except AttributeError:
+            category_name = h4.get_text(strip=True)
+            if "Vente en Salle" in category_name:
+                sale_category = "Vente en Salle"
+            elif "Vente en cours" in category_name:
+                sale_category = "Vente en cours"            
+            elif "Vente Web" in category_name: # or "Vente web Madrid" in category_name:
+                sale_category = "Vente Web"
+            elif "Vente de matériel en salle" in category_name:
+                sale_category = "Vente de matériel en salle"
+            else:
                 continue
+
+            divs = row.find_all("div", class_="d-table w-100 mb-2 rounded border no-decoration bg-graylight")
+            for div in divs: #[1:]:
+                # div = div.find("div", class_="d-table w-100 mb-2 rounded border no-decoration bg-graylight")
+                # if not div:
+                #     continue
+                try:
+                    location = div.find("span", class_="font-weight-bold").text.strip()
+                    lots = div.find("span", class_="text-graynorm").text.strip()
+                    descr = div.find("div", class_="text-graynorm mt-1 pt-1 border-top lh-20").text.strip()
+                    date = "Non précisé"
+                    link = URL + div.find("a", class_="sale-access-href")["href"].lstrip("/")
+                    linkLiveSale = "Non précisé"
+
+                    if sale_category == "Vente Web":
+                        ts_span = div.find("span", class_="js-countdown-time")
+                        if ts_span and ts_span.has_attr("data-ts"):
+                            date = convert_timestamp(ts_span["data-ts"])
+                    elif sale_category == "Vente en cours":
+                        date = "En cours"
+                    elif sale_category == "Vente en Salle":
+                        date_tag = div.find("div", class_="float-right")
+                        if date_tag:
+                            date = convert_french_date(date_tag.text.strip())
+                        # Формируем ссылку live
+                        parts = link.split("/")
+                        city = parts[4]  # Название города (например, "beauvais")
+                        sale_id = parts[5]  # Номер (например, "8058")                    
+                        linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
+
+                    sale_data = (location, descr, lots, date, link, linkLiveSale)
+                    if sale_data not in sales[sale_category]:
+                        sales[sale_category].append(sale_data)
+                except AttributeError:
+                    continue
     return sales
 
 def main():
     create_database()
-    soup = fetch_html(URL)
+    # soup = fetch_html(URL)
+    soup = load_html(HTML_FILE)
     sales_data = parse_sales(soup)
     for category, items in sales_data.items():
         print(f"\n🔹 {category}:")
         for sale in items:
-            print(f"📍 {sale[0]} - {sale[1]} - {sale[2]} - 🔗 {sale[3]} - 🔗 {sale[4]}")
-            insert_into_database(category, sale[0], sale[1], sale[2], sale[3], sale[4])
+            print(f"📍 {sale[0]} - {sale[1]} - {sale[2]} - {sale[3]} - 🔗 {sale[4]} - 🔗 {sale[5]}")
+            insert_into_database(category, sale[0], sale[1], sale[2], sale[3], sale[4], sale[5])
 
 if __name__ == "__main__":
     main()
