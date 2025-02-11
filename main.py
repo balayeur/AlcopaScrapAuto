@@ -6,12 +6,10 @@ from bs4 import BeautifulSoup
 
 URL = "https://www.alcopa-auction.fr/"
 DB_FILE = "auctions.db"
-HTML_FILE = "mnt/data/AlcopaAuctionVenteEnCours02.html"
+HTML_FILE = "mnt/data/AlcopaAuction.html"
 
 # Устанавливаем французскую локаль для работы с датами
 locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
-# locale.setlocale(locale.LC_TIME, "C.UTF-8")
-
 
 # Словарь для преобразования названий месяцев
 MONTHS_FR = {
@@ -29,7 +27,7 @@ def fetch_html(url):
     """Загружает HTML-страницу с веб-сайта."""
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
-    response.raise_for_status()  # Проверяем ошибки запроса
+    response.raise_for_status()
     return BeautifulSoup(response.text, "html.parser")
 
 def create_database():
@@ -45,24 +43,53 @@ def create_database():
             lots TEXT,
             date TEXT,
             link TEXT UNIQUE,
-            linkLive TEXT
+            linkLive TEXT,
+            status TEXT DEFAULT 'En cours'
         )
     """)
     conn.commit()
     conn.close()
 
-def insert_into_database(category, description, location, lots, date, link, linkLive):
-    """Вставляет данные в базу, если записи еще нет."""
+def insert_or_update_auction(category, description, location, lots, date, link, linkLive):
+    """Вставляет новый аукцион или обновляет его статус в базе."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    try:
+
+    cursor.execute("SELECT id FROM auctions WHERE link = ?", (link,))
+    result = cursor.fetchone()
+
+    if result:
+        # Аукцион уже есть, обновляем данные (вдруг дата изменилась)
         cursor.execute("""
-            INSERT INTO auctions (category, description, location, lots, date, link, linkLive)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            UPDATE auctions
+            SET category = ?, description = ?, location = ?, lots = ?, date = ?, linkLive = ?, status = 'En cours'
+            WHERE link = ?
+        """, (category, description, location, lots, date, linkLive, link))
+    else:
+        # Новый аукцион, добавляем
+        cursor.execute("""
+            INSERT INTO auctions (category, description, location, lots, date, link, linkLive, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'En cours')
         """, (category, description, location, lots, date, link, linkLive))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        print(f"⚠ Запись уже существует: {location} - {description} - {date} - {link} - {linkLive}")
+
+    conn.commit()
+    conn.close()
+
+def mark_auctions_as_finished(active_links):
+    """Отмечает аукционы, которых больше нет на сайте, как завершенные."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT link FROM auctions WHERE status = 'En cours'")
+    db_links = {row[0] for row in cursor.fetchall()}
+
+    finished_auctions = db_links - active_links  # Находим ссылки, которые исчезли
+
+    for link in finished_auctions:
+        cursor.execute("UPDATE auctions SET status = 'Terminé' WHERE link = ?", (link,))
+        print(f"✅ Аукцион завершен: {link}")
+
+    conn.commit()
     conn.close()
 
 def convert_timestamp(ts):
@@ -87,6 +114,7 @@ def parse_sales(soup):
         "Vente Web": [],
         "Vente de matériel en salle": []
     }
+    active_links = set()
 
     for row in soup.find_all("div", class_="row"):
         cols = row.find_all("div", class_="col-md-12", recursive=False)
@@ -126,9 +154,21 @@ def parse_sales(soup):
                         if ts_span and ts_span.has_attr("data-ts"):
                             date = convert_timestamp(ts_span["data-ts"])
 
+                        # Формируем ссылку live
+                        # link = "/vente-encheres-en-ligne/8577?site=internet"
+                        sale_id = link.split("/")[-1].split("?")[0]
+                        linkLiveSale = f"https://live-flash.alcopa-auction.fr/{sale_id}/flash-sale"
+
                     elif sale_category == "Vente en cours":
                         date = "En cours"
-
+                        parts = link.split("/")
+                        if len(parts) > 5:
+                            city, sale_id = parts[4], parts[5]
+                            if location == "Multisite":
+                                linkLiveSale = f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
+                            else:
+                                linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
+                                
                     elif sale_category == "Vente en Salle":
                         date_tag = div.find("div", class_="float-right")
                         if date_tag:
@@ -136,30 +176,37 @@ def parse_sales(soup):
 
                         # Формируем ссылку live
                         parts = link.split("/")
-                        if len(parts) > 5:  # Проверяем, что структура ссылки верная
+                        if len(parts) > 5:
                             city, sale_id = parts[4], parts[5]
-                            linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
+                            if location == "Multisite":
+                                linkLiveSale = f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
+                            else:
+                                linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
+                    
+                    elif sale_category == "Vente de matériel en salle":
+                        # Формируем ссылку live
+                        parts = link.split("/")
+                        if len(parts) > 5:
+                            sale_id = parts[5]
+                            if location == "Multisite":
+                                linkLiveSale = f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
+                            else:
+                                linkLiveSale = "ToDo"
 
-                    sale_data = (location, descr, lots, date, link, linkLiveSale)
-                    if sale_data not in sales[sale_category]:
-                        sales[sale_category].append(sale_data)
+                    active_links.add(link)
+                    insert_or_update_auction(sale_category, descr, location, lots, date, link, linkLiveSale)
 
                 except AttributeError:
                     continue  # Пропускаем ошибки парсинга
 
-    return sales
-
+    return active_links
 
 def main():
     create_database()
-    # soup = fetch_html(URL)
     soup = load_html(HTML_FILE)
-    sales_data = parse_sales(soup)
-    for category, items in sales_data.items():
-        print(f"\n🔹 {category}:")
-        for sale in items:
-            print(f"📍 {sale[0]} - {sale[1]} - {sale[2]} - {sale[3]} - 🔗 {sale[4]} - 🔗 {sale[5]}")
-            insert_into_database(category, sale[0], sale[1], sale[2], sale[3], sale[4], sale[5])
+    soup = fetch_html(URL)
+    active_links = parse_sales(soup)
+    mark_auctions_as_finished(active_links)
 
 if __name__ == "__main__":
     main()
