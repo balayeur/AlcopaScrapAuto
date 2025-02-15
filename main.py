@@ -6,7 +6,16 @@ from bs4 import BeautifulSoup
 
 URL = "https://www.alcopa-auction.fr/"
 DB_FILE = "auctions.db"
-HTML_FILE = "mnt/data/AlcopaAuction.html"
+# HTML_FILE = "mnt/data/AlcopaAuction.html"
+# HTML_FILE = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/alcopa_2025-02-11_23-35.html"
+DIRECTORY = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/"
+
+HTML_FILE = DIRECTORY + "alcopa_2025-02-10_23-35.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-12_23-35.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-13_23-35.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-14_23-00.html"
+
 
 # Устанавливаем французскую локаль для работы с датами
 locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
@@ -106,92 +115,88 @@ def convert_french_date(date_str):
     year = datetime.datetime.now().year
     return f"{year}-{month}-{day.zfill(2)}"
 
+def generate_live_link(sale_category, location, link):
+    """Генерирует ссылку на Live-аукцион в зависимости от категории и местоположения."""
+    parts = link.split("/")
+
+    if sale_category == "Vente Web" and len(parts) == 5:
+        sale_id = parts[4].split("?")[0]
+        return f"https://live-flash.alcopa-auction.fr/{sale_id}/flash-sale"
+
+    if len(parts) < 6:
+        return link  # Возвращаем исходную ссылку, если структура некорректная
+
+    city, sale_id = parts[4], parts[5].split("?")[0]
+
+    if location == "Multisite":
+        return f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
+
+    if sale_category == "Vente Web":
+        return f"https://live-flash.alcopa-auction.fr/{sale_id}/flash-sale"
+
+    return f"https://live-{city}.alcopa-auction.fr/{sale_id}"
+
+
 def parse_sales(soup):
     """Парсит веб-страницу и извлекает данные об аукционах."""
     sales = {
         "Vente en cours": [],
         "Vente en Salle": [],
         "Vente Web": [],
+        # "Vente de 2-roues": [],
         "Vente de matériel en salle": []
     }
     active_links = set()
 
-    for row in soup.find_all("div", class_="row"):
-        cols = row.find_all("div", class_="col-md-12", recursive=False)
-        if not cols:
-            continue
+    category_map = {
+        "Vente en Salle": "Vente en Salle",
+        "Vente en cours": "Vente en cours",
+        "Vente Web": "Vente Web",
+        # "Vente de 2-roues": "Vente de 2-roues",
+        "Vente de matériel en salle": "Vente de matériel en salle"
+    }
 
-        for col in cols:
+    for row in soup.find_all("div", class_="row"):
+        for col in row.find_all("div", class_="col-md-12", recursive=False):
             h4 = col.find("h4")
             if not h4:
                 continue
 
             category_name = h4.get_text(strip=True)
-            sale_category = None
-            if "Vente en Salle" in category_name:
-                sale_category = "Vente en Salle"
-            elif "Vente en cours" in category_name:
-                sale_category = "Vente en cours"
-            elif "Vente Web" in category_name:
-                sale_category = "Vente Web"
-            elif "Vente de matériel en salle" in category_name:
-                sale_category = "Vente de matériel en salle"
-            else:
+            sale_category = category_map.get(category_name)
+            if not sale_category:
                 continue
 
             # Ищем аукционы внутри row
             for div in row.find_all("div", class_="d-table w-100 mb-2 rounded border no-decoration bg-graylight"):
                 try:
-                    location = div.find("span", class_="font-weight-bold").text.strip()
-                    lots = div.find("span", class_="text-graynorm").text.strip()
-                    descr = div.find("div", class_="text-graynorm mt-1 pt-1 border-top lh-20").text.strip()
+                    location = div.find("span", class_="font-weight-bold").get_text(strip=True)
+                    lots = div.find("span", class_="text-graynorm").get_text(strip=True)
+                    descr = div.find("div", class_="text-graynorm mt-1 pt-1 border-top lh-20").get_text(strip=True)
                     link = URL + div.find("a", class_="sale-access-href")["href"].lstrip("/")
                     date = "Non précisé"
-                    linkLiveSale = "Non précisé"
+
+                    lots = lots.split(" ")[1]  # Оставляем только количество лотов
 
                     if sale_category == "Vente Web":
                         ts_span = div.find("span", class_="js-countdown-time")
                         if ts_span and ts_span.has_attr("data-ts"):
                             date = convert_timestamp(ts_span["data-ts"])
+                        else:
+                            date_tag = div.find("div", class_="float-right")
+                            if date_tag:
+                                date = convert_french_date(date_tag.get_text(strip=True))
 
-                        # Формируем ссылку live
-                        # link = "/vente-encheres-en-ligne/8577?site=internet"
-                        sale_id = link.split("/")[-1].split("?")[0]
-                        linkLiveSale = f"https://live-flash.alcopa-auction.fr/{sale_id}/flash-sale"
 
                     elif sale_category == "Vente en cours":
                         date = "En cours"
-                        parts = link.split("/")
-                        if len(parts) > 5:
-                            city, sale_id = parts[4], parts[5]
-                            if location == "Multisite":
-                                linkLiveSale = f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
-                            else:
-                                linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
-                                
-                    elif sale_category == "Vente en Salle":
+
+                    elif sale_category == "Vente en Salle" or sale_category == "Vente de matériel en salle":
                         date_tag = div.find("div", class_="float-right")
                         if date_tag:
-                            date = convert_french_date(date_tag.text.strip())
+                            date = convert_french_date(date_tag.get_text(strip=True))
 
-                        # Формируем ссылку live
-                        parts = link.split("/")
-                        if len(parts) > 5:
-                            city, sale_id = parts[4], parts[5]
-                            if location == "Multisite":
-                                linkLiveSale = f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
-                            else:
-                                linkLiveSale = f"https://live-{city}.alcopa-auction.fr/{sale_id}"
-                    
-                    elif sale_category == "Vente de matériel en salle":
-                        # Формируем ссылку live
-                        parts = link.split("/")
-                        if len(parts) > 5:
-                            sale_id = parts[5]
-                            if location == "Multisite":
-                                linkLiveSale = f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
-                            else:
-                                linkLiveSale = "ToDo"
+                    linkLiveSale = generate_live_link(sale_category, location, link)
 
                     active_links.add(link)
                     insert_or_update_auction(sale_category, descr, location, lots, date, link, linkLiveSale)
@@ -201,10 +206,11 @@ def parse_sales(soup):
 
     return active_links
 
+
 def main():
     create_database()
     soup = load_html(HTML_FILE)
-    soup = fetch_html(URL)
+    # soup = fetch_html(URL)
     active_links = parse_sales(soup)
     mark_auctions_as_finished(active_links)
 
