@@ -11,7 +11,7 @@ DB_FILE = "auctions.db"
 DIRECTORY = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/"
 
 HTML_FILE = DIRECTORY + "alcopa_2025-02-10_23-35.html"
-HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
+# HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-12_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-13_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-14_23-00.html"
@@ -84,22 +84,45 @@ def insert_or_update_auction(category, description, location, lots, date, link, 
     conn.commit()
     conn.close()
 
-def mark_auctions_as_finished(active_links):
-    """Отмечает аукционы, которых больше нет на сайте, как завершенные."""
+import sqlite3
+import datetime
+
+DB_FILE = "auctions.db"
+
+
+def mark_auctions_as_finished():
+    """Отмечает завершенными аукционы, дата которых - вчера или раньше."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT link FROM auctions WHERE status = 'En cours'")
-    db_links = {row[0] for row in cursor.fetchall()}
+    today = datetime.date.today()
 
-    finished_auctions = db_links - active_links  # Находим ссылки, которые исчезли
+    # Выбираем все активные аукционы
+    cursor.execute("SELECT id, date FROM auctions WHERE status = 'En cours'")
+    active_auctions = cursor.fetchall()
 
-    for link in finished_auctions:
-        cursor.execute("UPDATE auctions SET status = 'Terminé' WHERE link = ?", (link,))
-        print(f"✅ Аукцион завершен: {link}")
+    for auction_id, auction_date in active_auctions:
+        try:
+            if auction_date in ["En cours", "Non précisé"]:
+                continue  # Пропускаем аукционы без четкой даты
+
+            # Попробуем сначала с `HH:MM:SS`, если ошибка - обрабатываем без времени
+            try:
+                auction_date_obj = datetime.datetime.strptime(auction_date, "%Y-%m-%d %H:%M:%S").date()
+            except ValueError:
+                auction_date_obj = datetime.datetime.strptime(auction_date, "%Y-%m-%d").date()
+
+            if auction_date_obj < today:  # Если дата прошла
+                cursor.execute("UPDATE auctions SET status = 'Terminé' WHERE id = ?", (auction_id,))
+                print(f"✅ Аукцион завершен: ID {auction_id}, дата {auction_date}")
+
+        except ValueError as e:
+            print(f"⚠ Ошибка обработки даты для ID {auction_id}: {auction_date} ({e})")
+            continue
 
     conn.commit()
     conn.close()
+
 
 def convert_timestamp(ts):
     """Конвертирует UNIX timestamp в дату."""
@@ -212,7 +235,7 @@ def main():
     soup = load_html(HTML_FILE)
     # soup = fetch_html(URL)
     active_links = parse_sales(soup)
-    mark_auctions_as_finished(active_links)
+    mark_auctions_as_finished()
 
 if __name__ == "__main__":
     main()
