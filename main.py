@@ -11,10 +11,13 @@ DB_FILE = "auctions.db"
 DIRECTORY = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/"
 
 HTML_FILE = DIRECTORY + "alcopa_2025-02-10_23-35.html"
-# HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-12_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-13_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-14_23-00.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-15_22-00.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-16_22-00.html"
+HTML_FILE = DIRECTORY + "alcopa_2025-02-17_22-00.html"
 
 
 # Устанавливаем французскую локаль для работы с датами
@@ -124,6 +127,54 @@ def mark_auctions_as_finished():
     conn.close()
 
 
+def mark_auctions_as_finished_on_site(active_links):
+    """Отмечает аукционы завершенными, если они исчезли с сайта и их дата - сегодня.
+       Удаляет предстоящие аукционы, если они исчезли (значит, они изменились или отменены)."""
+
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    today = datetime.date.today()
+
+    # Получаем все аукционы со статусом 'En cours'
+    cursor.execute("SELECT id, link, date, description FROM auctions WHERE status = 'En cours'")
+    db_auctions = cursor.fetchall()
+
+    for auction_id, link, auction_date, descr in db_auctions:
+        try:
+            if link in active_links:
+                continue  # Аукцион все еще активен на сайте, пропускаем
+
+            if auction_date in ["En cours", "Non précisé"] or not auction_date.strip():
+                # ❌ Если дата неизвестна и аукцион исчез — удаляем
+                cursor.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
+                print(f"🚨 Аукцион удален (неизвестная дата, изменен или отменен): \n\t{auction_date} {descr} \n\t{link}")
+                continue  
+
+            # Пробуем обработать дату с временем, если ошибка - без времени
+            try:
+                auction_date_obj = datetime.datetime.strptime(auction_date, "%Y-%m-%d %H:%M:%S").date()
+            except ValueError:
+                auction_date_obj = datetime.datetime.strptime(auction_date, "%Y-%m-%d").date()
+
+            if auction_date_obj == today:
+                # ✅ Аукцион закончился сегодня и пропал → отмечаем как завершенный
+                cursor.execute("UPDATE auctions SET status = 'Terminé' WHERE id = ?", (auction_id,))
+                print(f"✅ Аукцион завершен сегодня: {link}")
+
+            elif auction_date_obj > today:
+                # ❌ Аукцион еще не должен был завершиться, но исчез → удаляем
+                cursor.execute("DELETE FROM auctions WHERE id = ?", (auction_id,))
+                print(f"🚨 Аукцион удален (был запланирован, но исчез): \n\t{auction_date} {descr} \n\t{link}")
+
+        except ValueError as e:
+            print(f"⚠ Ошибка обработки даты для аукциона {link}: {auction_date} {descr} ({e})")
+            continue
+
+    conn.commit()
+    conn.close()
+
+
 def convert_timestamp(ts):
     """Конвертирует UNIX timestamp в дату."""
     return datetime.datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M:%S")
@@ -149,7 +200,9 @@ def generate_live_link(sale_category, location, link):
     if len(parts) < 6:
         return link  # Возвращаем исходную ссылку, если структура некорректная
 
-    city, sale_id = parts[4], parts[5].split("?")[0]
+    # Убираем тире из названия города (например, "paris-sud" → "parissud")
+    city = parts[4].replace("-", "")
+    sale_id = parts[5].split("?")[0]  # Удаляем возможные GET-параметры
 
     if location == "Multisite":
         return f"https://www.alcopa-auction.fr/acceder-au-vente-encheres/{sale_id}/FR/1/2"
@@ -235,6 +288,7 @@ def main():
     soup = load_html(HTML_FILE)
     # soup = fetch_html(URL)
     active_links = parse_sales(soup)
+    mark_auctions_as_finished_on_site(active_links)
     mark_auctions_as_finished()
 
 if __name__ == "__main__":
