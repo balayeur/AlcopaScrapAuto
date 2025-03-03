@@ -18,6 +18,7 @@ HTML_FILE = DIRECTORY + "alcopa_2025-02-14_23-00.html"
 # HTML_FILE = DIRECTORY + "alcopa_2025-02-15_22-00.html"
 # HTML_FILE = DIRECTORY + "alcopa_2025-02-16_22-00.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-17_22-00.html"
+HTML_FILE = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/AuctionsList/2025-03-02_21-30_auctionsList.html"
 
 
 # Устанавливаем французскую локаль для работы с датами
