@@ -19,3 +19,9 @@ def sanitize_filename(filename, max_length=255):
 
     # Обрезаем имя файла, чтобы не превысить максимальную длину пути
     return sanitized[:max_length]
+if __name__ == "__main__":
+    auctions = find_completed_auctions()
+    print("Завершённые аукционы на сегодня:")
+    for _, linkLive, _, _, _ in auctions:
+        print(linkLive)
+    save_html_pages(auctions)
