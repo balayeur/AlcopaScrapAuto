@@ -19,6 +19,27 @@ def sanitize_filename(filename, max_length=255):
 
     # Обрезаем имя файла, чтобы не превысить максимальную длину пути
     return sanitized[:max_length]
+
+def find_completed_auctions():
+    """Находит завершённые аукционы с сегодняшней датой и возвращает link, linkLive и дату аукциона."""
+    today = datetime.today().strftime("%Y-%m-%d")
+    # today = "2025-02-11"
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT link, linkLive, date, description, location FROM auctions
+        WHERE status = 'Terminé'
+    """)
+    
+    completed_auctions = []
+    for row in cursor.fetchall():
+        link, linkLive, date, descr, location = row
+        if date.startswith(today):  # Учитываем оба формата даты
+            completed_auctions.append((link, linkLive, date, descr, location))
+    
+    conn.close()
+    return completed_auctions
 if __name__ == "__main__":
     auctions = find_completed_auctions()
     print("Завершённые аукционы на сегодня:")
