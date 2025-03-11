@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аукционы</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .status-en-cours {
+            color: green;
+            font-weight: bold;
+        }
+        .status-termine {
+            color: red;
+            font-weight: bold;
+        }
+        a {
+            text-decoration: none;
+            color: #0066cc;
+        }
+        h2 {
+            margin-top: 40px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Аукционы</h1>
+
+<!-- Активные аукционы -->
+<h2>Активные аукционы</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Категория</th>
+            <th>Описание</th>
+            <th>Локация</th>
+            <th>Лоты</th>
+            <th>Дата</th>
+            <th>Список</th>
+            <th>Live</th>
+            <!-- <th>Статус</th> -->
+        </tr>
+    </thead>
+    <tbody>
+        {% for auction in active_auctions %}
+            <tr>
+                <td>{{ auction[1] }}</td>
+                <td>{{ auction[2] }}</td>
+                <td>{{ auction[3] }}</td>
+                <td>{{ auction[4] }}</td>
+                <td>{{ auction[5] }}</td>
+                <td><a href="{{ auction[6] }}" class="btn btn-primary" 
+                    target="_blank">Liste</a></td>
+                <td><a href="{{ auction[7] }}" class="btn btn-primary" 
+                    target="_blank">Live</a></td>
+                <!-- <td class="status-en-cours">🟢 En cours</td> -->
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Завершенные аукционы -->
+<h2>Завершенные аукционы</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Категория</th>
+            <th>Описание</th>
+            <th>Локация</th>
+            <th>Лоты</th>
+            <th>Дата</th>
+            <th>Список</th>
+            <th>Live</th>
+            <!-- <th>Статус</th> -->
+        </tr>
+    </thead>
+    <tbody>
+        {% for auction in finished_auctions %}
+            <tr>
+                <td>{{ auction[1] }}</td>
+                <td>{{ auction[2] }}</td>
+                <td>{{ auction[3] }}</td>
+                <td>{{ auction[4] }}</td>
+                <td>{{ auction[5] }}</td>
+                <td><a href="{{ auction[6] }}" class="btn btn-primary" 
+                    target="_blank">Liste</a></td>
+                <td><a href="{{ auction[7] }}" class="btn btn-primary" 
+                    target="_blank">Live</a></td>
+                <!-- <td class="status-termine">🔴 Terminé</td> -->
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>

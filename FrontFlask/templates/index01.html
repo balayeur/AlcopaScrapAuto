@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аукционы</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        a {
+            text-decoration: none;
+            color: #0066cc;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Аукционы</h1>
+<table>
+    <thead>
+        <tr>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Lacalisation</th>
+            <th>Lots</th>
+            <th>Date</th>
+            <th>Liste</th>
+            <th>Live</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for auction in auctions %}
+            <tr>
+                <td>{{ auction[1] }}</td>
+                <td>{{ auction[2] }}</td>
+                <td>{{ auction[3] }}</td>
+                <td>{{ auction[4] }}</td>
+                <td>{{ auction[5] }}</td>
+                <td><a href="{{ auction[6] }}" class="btn btn-primary" 
+                    target="_blank">Liste</a></td>
+                <td><a href="{{ auction[7] }}" class="btn btn-primary" 
+                    target="_blank">Live</a></td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>
