@@ -3,13 +3,16 @@ import sqlite3
 import datetime
 import locale
 from bs4 import BeautifulSoup
+import sqlite3
+import datetime
+
 
 URL = "https://www.alcopa-auction.fr/"
 DB_FILE = "auctions.db"
+
 # HTML_FILE = "mnt/data/AlcopaAuction.html"
 # HTML_FILE = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/alcopa_2025-02-11_23-35.html"
 DIRECTORY = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/"
-
 HTML_FILE = DIRECTORY + "alcopa_2025-02-10_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-12_23-35.html"
@@ -88,15 +91,6 @@ def insert_or_update_auction(category, description, location, lots, date, link, 
     conn.commit()
     conn.close()
 
-import sqlite3
-import datetime
-
-DB_FILE = "auctions.db"
-
-import sqlite3
-import datetime
-
-DB_FILE = "auctions.db"
 
 def update_auction_statuses(active_links):
     """Обновляет статусы аукционов: отмечает завершенные и удаляет отмененные."""
