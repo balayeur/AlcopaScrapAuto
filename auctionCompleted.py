@@ -40,6 +40,66 @@ def find_completed_auctions():
     
     conn.close()
     return completed_auctions
+
+def extract_live_id(link):
+    """Извлекает идентификационный номер live из поля link."""
+    match = re.search(r'/(\d+)(?:\?|$)', link)
+    return match.group(1) if match else "unknown"
+
+def save_html_pages(auctions):
+    # Создаем объект класса
+    scraper = WebScraper(
+        login_url="https://www.alcopa-auction.fr/login",
+        email="balayeur@hotmail.com",
+        password="mironchikova"
+    )
+    if len(auctions) > 0:
+        True
+        # Запускаем драйвер и выполняем логин
+        scraper.start_driver()
+        scraper.login()
+        scraper.load_cookies()
+
+    """Проходит по списку ссылок, загружает страницы с паузой в 10 секунд и сохраняет их локально."""
+    for link, linkLive, date, descr, location in auctions:
+        try:
+            if location == "Madrid":
+                print(f"Пропускаем аукцион в Мадриде: {descr} {linkLive}")
+                continue
+
+            live_id = extract_live_id(link)
+
+            # Формируем безопасное имя файла
+            filename = f"{date}_{live_id}_{location}_{descr}.html"
+            filename = sanitize_filename(filename)
+            save_path = os.path.join("Session", "SavedPage", filename)           
+            scraper.save_page_source(linkLive, save_path)
+
+            # response = requests.get(linkLive)
+            # response.raise_for_status()
+            
+            # file_name = f"auction_{date}_{live_id}.html"
+            # file_path = os.path.join(SAVE_DIR, file_name)
+
+            # with open(file_path, "w", encoding="utf-8") as file:
+            #     file.write(response.text)
+            # print(f"Сохранено: {file_path}")
+            time.sleep(10)  # Пауза в 10 секунд
+
+        except requests.RequestException as e:
+            print(f"Ошибка загрузки {linkLive}: {e}")
+
+    # today = datetime.today().strftime("%Y-%m-%d")
+    # categories = ["car", "utility", "gear", "moped", "broken"]
+    # for category in categories:
+    #     filename = f"{today}_{category}.html"
+    #     save_path = os.path.join("Session", "SavedPage", filename)
+    #     scraper.save_page_source(f"https://www.alcopa-auction.fr/recherche#{category}", save_path)
+    #     time.sleep(10)  # Pause de 10 secondes entre chaque requête
+
+    # Завершаем работу с драйвером
+    scraper.quit()
+
 if __name__ == "__main__":
     auctions = find_completed_auctions()
     print("Завершённые аукционы на сегодня:")
