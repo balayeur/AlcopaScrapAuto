@@ -4,7 +4,6 @@ import datetime
 import locale
 from bs4 import BeautifulSoup
 import sqlite3
-import datetime
 
 
 URL = "https://www.alcopa-auction.fr/"
