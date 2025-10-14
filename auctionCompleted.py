@@ -47,17 +47,18 @@ def extract_live_id(link):
     return match.group(1) if match else "unknown"
 
 def save_html_pages(auctions):
-    # Создаем объект класса
     scraper = WebScraper(
         login_url="https://www.alcopa-auction.fr/login",
         email="balayeur@hotmail.com",
         password="mironchikova"
     )
     if len(auctions) > 0:
-        True
-        # Запускаем драйвер и выполняем логин
         scraper.start_driver()
-        scraper.login()
+        login_success = scraper.login()
+        if not login_success:
+            print("Авторизация не удалась, дальнейшее выполнение невозможно.")
+            scraper.quit()
+            return
         scraper.load_cookies()
 
     """Проходит по списку ссылок, загружает страницы с паузой в 10 секунд и сохраняет их локально."""
