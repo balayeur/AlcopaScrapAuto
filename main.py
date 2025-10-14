@@ -4,14 +4,22 @@ import datetime
 import locale
 from bs4 import BeautifulSoup
 import sqlite3
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import time
 
 
 URL = "https://www.alcopa-auction.fr/"
 DB_FILE = "auctions.db"
 
+# 41-MBA13-2018
+USER_NAME = "administrateur"
+# 
+# USER_NAME = "maximebeauger"
+
 # HTML_FILE = "mnt/data/AlcopaAuction.html"
 # HTML_FILE = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/alcopa_2025-02-11_23-35.html"
-DIRECTORY = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/"
+DIRECTORY = "/Users/" + USER_NAME + "/Projects/PYTHON/AlcopaLaunchAgents/"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-10_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-11_23-35.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-12_23-35.html"
@@ -20,7 +28,9 @@ HTML_FILE = DIRECTORY + "alcopa_2025-02-14_23-00.html"
 # HTML_FILE = DIRECTORY + "alcopa_2025-02-15_22-00.html"
 # HTML_FILE = DIRECTORY + "alcopa_2025-02-16_22-00.html"
 HTML_FILE = DIRECTORY + "alcopa_2025-02-17_22-00.html"
-HTML_FILE = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/AuctionsList/2025-03-02_21-30_auctionsList.html"
+HTML_FILE = DIRECTORY + "alcopa_2025_10_01_13-48.html"
+HTML_FILE = DIRECTORY + "alcopa_2025_10_02_23-25.html"
+# HTML_FILE = "/Users/maximebeauger/Projects/PYTHON/AlcopaLaunchAgents/AuctionsList/2025-03-02_21-30_auctionsList.html"
 
 
 # Устанавливаем французскую локаль для работы с датами
@@ -39,11 +49,26 @@ def load_html(file_path):
         return BeautifulSoup(file, "html.parser")
 
 def fetch_html(url):
-    """Загружает HTML-страницу с веб-сайта."""
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    return BeautifulSoup(response.text, "html.parser")
+    """Загружает HTML-страницу с помощью Selenium и возвращает BeautifulSoup."""
+    chrome_options = Options()
+    # chrome_options.add_argument("--headless")  # Запуск без окна браузера
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.get(url)
+    time.sleep(30)  # Ждем полной загрузки страницы
+
+    html = driver.page_source
+    driver.quit()
+    return BeautifulSoup(html, "html.parser")
+
+# def fetch_html(url):
+#     """Загружает HTML-страницу с веб-сайта."""
+#     headers = {"User-Agent": "Mozilla/5.0"}
+#     response = requests.get(url, headers=headers)
+#     response.raise_for_status()
+#     return BeautifulSoup(response.text, "html.parser")
+
 
 def create_database():
     """Создает таблицу, если она не существует."""
@@ -252,7 +277,7 @@ def parse_sales(soup):
 
 def main():
     create_database()
-    soup = load_html(HTML_FILE)
+    # soup = load_html(HTML_FILE)
     soup = fetch_html(URL)
     active_links = parse_sales(soup)
     update_auction_statuses(active_links)
