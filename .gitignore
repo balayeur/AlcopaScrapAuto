@@ -1,2 +1,4 @@
 /dev
+/.venv
 /Session/SavedPage
+/__pycache__
