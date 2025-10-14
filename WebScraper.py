@@ -2,6 +2,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import pickle
 import time
 
@@ -20,29 +22,58 @@ class WebScraper:
         chrome_options.add_argument("--disable-infobars")  # Отключает всплывающие уведомления
         self.driver = webdriver.Chrome(options=chrome_options)
 
+    # # Находим поля ввода
+    # username_input = self.driver.find_element(By.NAME, "email")
+    # password_input = self.driver.find_element(By.NAME, "password")
+
+    # # username_input = self.driver.find_element(By.NAME, "login[email]")
+    # # password_input = self.driver.find_element(By.NAME, "login[password]")
+
+
     def login(self):
         if self.driver is None:
             raise ValueError("Driver is not started. Please call start_driver() first.")
 
         self.driver.get(self.login_url)
 
-        # Находим поля ввода
-        username_input = self.driver.find_element(By.NAME, "email")
-        password_input = self.driver.find_element(By.NAME, "password")
-        
-        # username_input = self.driver.find_element(By.NAME, "login[email]")
-        # password_input = self.driver.find_element(By.NAME, "login[password]")
+        print("Появилась капча. Пройдите её вручную в открытом окне браузера.")
+        input("После прохождения капчи и появления pop-up для логина нажмите Enter...")
 
-        # Вводим логин и пароль
-        username_input.send_keys(self.email)
-        password_input.send_keys(self.password)
-        password_input.send_keys(Keys.RETURN)
+        # Ждем появления pop-up с формой логина
+        try:
+            username_input = WebDriverWait(self.driver, 60).until(
+                EC.presence_of_element_located((By.NAME, "email"))
+            )
+            password_input = self.driver.find_element(By.NAME, "password")
+        except Exception as e:
+            self.driver.save_screenshot("login_error.png")
+            print("Ошибка при выполнении входа:", e)
+            return False
 
-        time.sleep(15)  # Ждем загрузки страницы
+        if username_input and password_input:
+            username_input.send_keys(self.email)
+            password_input.send_keys(self.password)
+            password_input.send_keys(Keys.RETURN)
+        else:
+            print("Не удалось найти поля для логина или пароля.")
+            self.driver.save_screenshot("login_fields_not_found.png")
+            return False
 
-        # Сохраняем cookies в файл
+        # try:
+        #     print("WebDriverWait ждет..")
+        #     WebDriverWait(self.driver, 20).until(                
+        #         EC.presence_of_element_located((By.CSS_SELECTOR, ".logout, .profile, .user-menu"))
+        #     )
+        #     print("Вход выполнен успешно.")
+        # except Exception as e:
+        #     print("Вход не выполнен или страница не загрузилась:", e)
+        #     self.driver.save_screenshot("login_failed.png")
+        #     return False
+
+        time.sleep(5)
         with open(self.cookies_file, "wb") as file:
             pickle.dump(self.driver.get_cookies(), file)
+        return True  # Возвращаем True при успехе
 
     def load_cookies(self):
         if self.driver is None:
