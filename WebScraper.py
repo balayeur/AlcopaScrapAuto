@@ -6,6 +6,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import pickle
 import time
+import os
 
 
 class WebScraper:
@@ -34,12 +35,45 @@ class WebScraper:
         if self.driver is None:
             raise ValueError("Driver is not started. Please call start_driver() first.")
 
+        # Открываем страницу входа
         self.driver.get(self.login_url)
 
-        print("Появилась капча. Пройдите её вручную в открытом окне браузера.")
-        input("После прохождения капчи и появления pop-up для логина нажмите Enter...")
+        # Если есть сохранённые cookies — пытаемся их загрузить и обновить страницу,
+        # чтобы избежать капчи/авторизации вручную
+        if os.path.exists(self.cookies_file):
+            try:
+                self.load_cookies()
+                self.driver.refresh()
+            except Exception:
+                # не критично — продолжим обычный поток
+                pass
 
-        # Ждем появления pop-up с формой логина
+        # Быстрая проверка: есть ли на странице видимая капча/проверка робота.
+        captcha_selectors = [
+            (By.CSS_SELECTOR, "iframe[src*='recaptcha']"),
+            (By.CSS_SELECTOR, "div.g-recaptcha"),
+            (By.CSS_SELECTOR, "div.h-captcha"),
+            (By.CSS_SELECTOR, "div.cf-browser-verification"),
+            (By.XPATH, "//*[contains(translate(text(),'CAPTCHA','captcha'),'captcha')]"),
+        ]
+
+        captcha_found = False
+        for by, sel in captcha_selectors:
+            try:
+                # очень короткая явная ожидание — просто для быстрой проверки
+                WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((by, sel)))
+                captcha_found = True
+                break
+            except Exception:
+                continue
+
+        # Если капча обнаружена — просим пользователя пройти её вручную,
+        # иначе продолжаем сразу искать pop-up логина.
+        if captcha_found:
+            print("Появилась капча. Пройдите её вручную в открытом окне браузера.")
+            input("После прохождения капчи и появления pop-up для логина нажмите Enter...")
+
+        # Ждём появления полей логина (pop-up). Если их нет — возвращаем False.
         try:
             username_input = WebDriverWait(self.driver, 60).until(
                 EC.presence_of_element_located((By.NAME, "email"))
@@ -50,8 +84,11 @@ class WebScraper:
             print("Ошибка при выполнении входа:", e)
             return False
 
+        # Заполняем поля и отправляем форму
         if username_input and password_input:
+            username_input.clear()
             username_input.send_keys(self.email)
+            password_input.clear()
             password_input.send_keys(self.password)
             password_input.send_keys(Keys.RETURN)
         else:
@@ -59,18 +96,20 @@ class WebScraper:
             self.driver.save_screenshot("login_fields_not_found.png")
             return False
 
-        # try:
-        #     print("WebDriverWait ждет..")
-        #     WebDriverWait(self.driver, 20).until(                
-        #         EC.presence_of_element_located((By.CSS_SELECTOR, ".logout, .profile, .user-menu"))
-        #     )
-        #     print("Вход выполнен успешно.")
-        # except Exception as e:
-        #     print("Вход не выполнен или страница не загрузилась:", e)
-        #     self.driver.save_screenshot("login_failed.png")
-        #     return False
+        # Ждём признака успешного входа (например, кнопка выхода/профиль или изменение URL)
+        try:
+            WebDriverWait(self.driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".logout, .profile, .user-menu"))
+            )
+            print("Вход выполнен успешно.")
+        except Exception:
+            # Можно также проверить изменение URL или отсутствие поп-up
+            print("Вход не выполнен или страница не загрузилась корректно.")
+            self.driver.save_screenshot("login_failed.png")
+            return False
 
-        time.sleep(5)
+        # Сохраняем cookies для будущих запусков
+        time.sleep(2)
         with open(self.cookies_file, "wb") as file:
             pickle.dump(self.driver.get_cookies(), file)
         return True  # Возвращаем True при успехе
