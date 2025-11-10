@@ -4,18 +4,21 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 import pickle
 import time
 import os
 
 
 class WebScraper:
+    
     def __init__(self, login_url, email, password, cookies_file="cookies.pkl"):
         self.login_url = login_url
         self.email = email
         self.password = password
         self.cookies_file = cookies_file
         self.driver = None
+
 
     def start_driver(self):
         chrome_options = Options()
@@ -35,8 +38,11 @@ class WebScraper:
         if self.driver is None:
             raise ValueError("Driver is not started. Please call start_driver() first.")
 
+        # input("1...")
         # Открываем страницу входа
         self.driver.get(self.login_url)
+        
+        # input("2...")
 
         # Если есть сохранённые cookies — пытаемся их загрузить и обновить страницу,
         # чтобы избежать капчи/авторизации вручную
@@ -44,28 +50,45 @@ class WebScraper:
             try:
                 self.load_cookies()
                 self.driver.refresh()
+                # print("Cookies загружены, страница обновлена.")
+                # Быстрая проверка: уже ли мы залогинены по элементу меню пользователя
+                try:
+                    WebDriverWait(self.driver, 3).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.menu-user"))
+                    )
+                    print("Cookies загружены и пользователь уже залогинен — пропускаем вход.")
+                    return True
+                except TimeoutException:
+                    print("Cookies загружены, но пользователь не залогинен — продолжаем обычный вход.")
             except Exception:
                 # не критично — продолжим обычный поток
+                print("Не удалось загрузить cookies, продолжаем обычный вход.")
                 pass
 
-        # Быстрая проверка: есть ли на странице видимая капча/проверка робота.
         captcha_selectors = [
-            (By.CSS_SELECTOR, "iframe[src*='recaptcha']"),
-            (By.CSS_SELECTOR, "div.g-recaptcha"),
-            (By.CSS_SELECTOR, "div.h-captcha"),
-            (By.CSS_SELECTOR, "div.cf-browser-verification"),
-            (By.XPATH, "//*[contains(translate(text(),'CAPTCHA','captcha'),'captcha')]"),
+            ("recaptcha_iframe", By.CSS_SELECTOR, "iframe[src*='recaptcha']"),
+            ("g-recaptcha", By.CSS_SELECTOR, "div.g-recaptcha"),
+            ("h-captcha", By.CSS_SELECTOR, "div.h-captcha"),
+            ("cloudflare_browser_verification", By.CSS_SELECTOR, "div.cf-browser-verification"),
+            ("text_contains_captcha", By.XPATH, "//*[contains(translate(text(),'CAPTCHA','captcha'),'captcha')]"),
         ]
 
+        # input("3...")
+
+        matched_name = None
+        matched_selector = None
         captcha_found = False
-        for by, sel in captcha_selectors:
+        for name, by, sel in captcha_selectors:
             try:
                 # очень короткая явная ожидание — просто для быстрой проверки
                 WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((by, sel)))
+                matched_name = name
+                matched_selector = (by, sel)
                 captcha_found = True
-                break
-            except Exception:
-                continue
+                print(f"Обнаружена капча: {matched_name} селектор = {matched_selector}")
+                break            
+            except TimeoutException:
+                continue        
 
         # Если капча обнаружена — просим пользователя пройти её вручную,
         # иначе продолжаем сразу искать pop-up логина.
@@ -114,6 +137,7 @@ class WebScraper:
             pickle.dump(self.driver.get_cookies(), file)
         return True  # Возвращаем True при успехе
 
+
     def load_cookies(self):
         if self.driver is None:
             raise ValueError("Driver is not started. Please call start_driver() first.")
@@ -126,6 +150,7 @@ class WebScraper:
                     self.driver.add_cookie(cookie)
         except FileNotFoundError:
             print("Cookies файл не найден. Необходимо авторизоваться заново.")
+
 
     def save_page_source(self, url, save_path):
         if self.driver is None:
@@ -141,6 +166,7 @@ class WebScraper:
             file.write(page_source)
         print(f"Сохранено: {save_path}")
 
+
     def save_multiple_pages(self, urls):
         if self.driver is None:
             raise ValueError("Driver is not started. Please call start_driver() first.")
@@ -149,6 +175,7 @@ class WebScraper:
             save_path = f"Session/page_{idx + 1}.html"
             self.save_page_source(url, save_path)
             time.sleep(10)  # Пауза между запросами
+
 
     def quit(self):
         if self.driver:
