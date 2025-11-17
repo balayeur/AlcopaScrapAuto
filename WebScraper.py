@@ -70,7 +70,7 @@ class WebScraper:
             ("g-recaptcha", By.CSS_SELECTOR, "div.g-recaptcha"),
             ("h-captcha", By.CSS_SELECTOR, "div.h-captcha"),
             ("cloudflare_browser_verification", By.CSS_SELECTOR, "div.cf-browser-verification"),
-            ("text_contains_captcha", By.XPATH, "//*[contains(translate(text(),'CAPTCHA','captcha'),'captcha')]"),
+            # ("text_contains_captcha", By.XPATH, "//*[contains(translate(text(),'CAPTCHA','captcha'),'captcha')]"),
         ]
 
         # input("3...")
@@ -98,13 +98,14 @@ class WebScraper:
 
         # Ждём появления полей логина (pop-up). Если их нет — возвращаем False.
         try:
+            print("Ожидание появления полей логина...")
             username_input = WebDriverWait(self.driver, 60).until(
                 EC.presence_of_element_located((By.NAME, "email"))
             )
             password_input = self.driver.find_element(By.NAME, "password")
         except Exception as e:
-            self.driver.save_screenshot("login_error.png")
-            print("Ошибка при выполнении входа:", e)
+            self.driver.save_screenshot("Session/Log/login_error.png")
+            print("Смотри скриншот в логе. Ошибка при выполнении входа:", e)
             return False
 
         # Заполняем поля и отправляем форму
@@ -115,20 +116,20 @@ class WebScraper:
             password_input.send_keys(self.password)
             password_input.send_keys(Keys.RETURN)
         else:
-            print("Не удалось найти поля для логина или пароля.")
-            self.driver.save_screenshot("login_fields_not_found.png")
+            print("Не удалось найти поля для логина или пароля. Смотри скриншот в логе.")
+            self.driver.save_screenshot("Session/Log/login_fields_not_found.png")
             return False
 
         # Ждём признака успешного входа (например, кнопка выхода/профиль или изменение URL)
         try:
             WebDriverWait(self.driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".logout, .profile, .user-menu"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".logout, .profile, .menu-user"))
             )
             print("Вход выполнен успешно.")
         except Exception:
             # Можно также проверить изменение URL или отсутствие поп-up
-            print("Вход не выполнен или страница не загрузилась корректно.")
-            self.driver.save_screenshot("login_failed.png")
+            print("Вход не выполнен или страница не загрузилась корректно. Смотри скриншот в логе.")
+            self.driver.save_screenshot("Session/Log/login_failed.png")
             return False
 
         # Сохраняем cookies для будущих запусков
